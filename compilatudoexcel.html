@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compilador Universal de Excel e CSV</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 650px;
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 10px;
+        }
+        p.description {
+            color: #5f6368;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #dadce0;
+            padding: 30px;
+            border-radius: 8px;
+            background-color: #fafafa;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #1a73e8;
+        }
+        #fileInput {
+            margin-top: 15px;
+        }
+        #status {
+            margin-top: 25px;
+            font-weight: 600;
+            min-height: 24px;
+        }
+        .success { color: #1e8e3e; }
+        .error { color: #d93025; }
+        .info { color: #1a73e8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Compilador Universal</h1>
+        <p class="description">Une múltiplos arquivos <strong>Excel (.xlsx, .xls)</strong> ou <strong>CSV</strong> em um único documento.</p>
+
+        <div class="upload-area">
+            <strong>Selecione os arquivos:</strong><br>
+            <input type="file" id="fileInput" multiple accept=".csv, .xlsx, .xls">
+        </div>
+        
+        <div id="status">Aguardando seleção...</div>
+    </div>
+
+    <script>
+        const statusElement = document.getElementById('status');
+        const fileInput = document.getElementById('fileInput');
+
+        fileInput.addEventListener('change', async (event) => {
+            const files = event.target.files;
+            if (files.length === 0) return;
+
+            statusElement.textContent = `Processando ${files.length} arquivo(s)...`;
+            statusElement.className = 'info';
+
+            let allRows = [];
+            let universalHeader = [];
+
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const data = await file.arrayBuffer();
+                    
+                    // Leitura universal (Excel ou CSV) usando a biblioteca XLSX
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    // Pega a primeira aba (sheet) do arquivo
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Converte a aba para uma matriz de arrays (JSON)
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    if (jsonData.length > 0) {
+                        // Define o cabeçalho baseado no primeiro arquivo
+                        if (allRows.length === 0) {
+                            universalHeader = jsonData[0];
+                        }
+
+                        // Processa as linhas (pula a primeira que é o cabeçalho)
+                        for (let j = 1; j < jsonData.length; j++) {
+                            const row = jsonData[j];
+                            if (row.length > 0) {
+                                // Adiciona o nome do arquivo na primeira coluna e mantém os dados
+                                allRows.push([file.name, ...row]);
+                            }
+                        }
+                    }
+                }
+
+                if (allRows.length > 0) {
+                    const finalHeader = ["Arquivo de Origem", ...universalHeader];
+                    downloadExcel(finalHeader, allRows);
+                    statusElement.textContent = `✅ Concluído! ${allRows.length} linhas compiladas.`;
+                    statusElement.className = 'success';
+                } else {
+                    statusElement.textContent = "❌ Nenhuma linha de dado encontrada.";
+                    statusElement.className = 'error';
+                }
+
+            } catch (error) {
+                console.error(error);
+                statusElement.textContent = "❌ Erro ao processar: " + error.message;
+                statusElement.className = 'error';
+            }
+            
+            fileInput.value = ""; 
+        });
+
+        function downloadExcel(header, rows) {
+            // Cria uma nova planilha com o cabeçalho e os dados
+            const worksheetData = [header, ...rows];
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+            
+            XLSX.utils.book_append_sheet(wb, ws, "Compilado");
+
+            // Gera o download do arquivo .xlsx
+            XLSX.writeFile(wb, "compilado_universal_Jackson_" + new Date().getTime() + ".xlsx");
+        }
+    </script>
+</body>
+</html>
